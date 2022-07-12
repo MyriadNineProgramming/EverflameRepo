@@ -1,0 +1,96 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class PlayerMovement : MonoBehaviour
+{
+    [SerializeField] private float speed;//SerializeField makes speed adjustable in unity
+    [SerializeField] private float jumpPower;
+    [SerializeField] private LayerMask groundLayer;
+    [SerializeField] private LayerMask wallLayer;
+    private Rigidbody2D body;//instance of asset
+    private Animator anim;//access to animator
+    private BoxCollider2D boxCollider;
+    private float wallJumpCooldown;
+    private float horizontalInput;
+
+    private void Awake()
+    {
+        //Grab references for rigidbody and animator from game object
+        body = GetComponent<Rigidbody2D>();//getcomponent grants access to the rigidbody2d asset assigned to player
+        anim = GetComponent<Animator>();//ditto
+        boxCollider = GetComponent<BoxCollider2D>();
+    }
+
+    private void Update()//updates on every frame while running
+    {
+         horizontalInput = Input.GetAxis("Horizontal");//stores the input.getaxis value
+        
+        if (horizontalInput > 0.01f)//When the horizontal input is bigger than 0.01 (when the player is moving right)
+            transform.localScale = Vector3.one;//changes player scale to be 1 on X axis
+
+        else if (horizontalInput < -0.01f)//When the horizontal input is less than 0.01 (when the player is moving left)
+            transform.localScale = new Vector3(-1, 1, 1);//faces the player left while moving left
+
+        //set animator parameters
+        anim.SetBool("Run", horizontalInput != 0);
+        anim.SetBool("grounded", isGrounded());
+
+        //Wall jump logic
+        if (wallJumpCooldown > 0.2f)
+        {
+            body.velocity = new Vector2(horizontalInput * speed, body.velocity.y);//adding left and right movement
+
+            if (onWall() && !isGrounded())
+            {
+                body.gravityScale = 0;
+                body.velocity = Vector2.zero;
+            }
+            else
+                body.gravityScale = 3;
+
+            if (Input.GetKey(KeyCode.Space))//KeyCode is a boolean that detects if a key is pressed or not..."Space" can be substituted with a different key
+                Jump(); //Adding a new direction, up, keeping our horizontal velocity from last time but speed is correlated with jump
+        }
+        else
+            wallJumpCooldown += Time.deltaTime;
+    }
+
+    private void Jump()
+    {
+        if (isGrounded())
+        {
+            body.velocity = new Vector2(body.velocity.x, jumpPower);
+            anim.SetTrigger("jump");
+        }
+        else if (onWall() && !isGrounded())
+        {
+            if (horizontalInput == 0)
+            {
+                body.velocity = new Vector2(-Mathf.Sign(transform.localScale.x) * 10, 0);
+                transform.localScale = new Vector3(-Mathf.Sign(transform.localScale.x), transform.localScale.y, transform.localScale.z);
+            }
+            else
+                body.velocity = new Vector2(-Mathf.Sign(transform.localScale.x) * 3, 6);
+
+            wallJumpCooldown = 0;
+
+        }
+    }
+    private bool isGrounded()
+    {
+        RaycastHit2D raycastHit = Physics2D.BoxCast(boxCollider.bounds.center, boxCollider.bounds.size, 0, Vector2.down, 0.1f, groundLayer);//uses raycasting to determinhe if the player is standing on ground. This example uses a box with the player's size instead of a single ray
+        return raycastHit.collider != null;//will return nul if boxcollider cannot detect ground meaning isGrounded() will return false
+    }
+
+    private bool onWall()
+    {
+        RaycastHit2D raycastHit = Physics2D.BoxCast(boxCollider.bounds.center, boxCollider.bounds.size, 0, new Vector2(transform.localScale.x, 0), 0.1f, wallLayer);//uses raycasting to determinhe if the player is on a wall. This example uses a box with the player's size instead of a single ray
+        return raycastHit.collider != null;//will return nul if boxcollider cannot detect ground meaning isGrounded() will return false
+    }
+
+    public bool canAttack()
+    {
+        return horizontalInput == 0 && isGrounded() && !onWall();
+    }
+}
